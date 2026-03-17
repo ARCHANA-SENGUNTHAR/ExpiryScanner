@@ -3,6 +3,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import ExpiringItemCard from "../components/ExpiringItemCard";
 import RecipeCard from "../components/RecipeCard";
 
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+const startOfDay = (date) => {
+  const normalizedDate = new Date(date);
+  normalizedDate.setHours(0, 0, 0, 0);
+  return normalizedDate;
+};
+
 export default function CookingInsights({ onShowScanner, onBack }) 
  {
   const apiBase = process.env.REACT_APP_API_URL || "http://localhost:5000";
@@ -35,22 +43,22 @@ export default function CookingInsights({ onShowScanner, onBack })
           throw new Error("Failed to load items");
         }
 
-        const today = new Date();
+        const today = startOfDay(new Date());
         const normalized = data
           .map((item) => {
-            const expiry = new Date(item.expiryDate);
-            const daysLeft = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+            const expiry = startOfDay(item.expiryDate);
+            const daysLeft = Math.ceil((expiry - today) / DAY_MS);
             let status = "green";
             if (daysLeft <= 1) status = "red";
             else if (daysLeft <= 3) status = "yellow";
             return {
               id: item._id,
               name: item.name,
-              daysLeft: Math.max(daysLeft, 0),
+              daysLeft,
               status,
             };
           })
-          .filter((item) => item.status === "red" || item.status === "yellow")
+          .filter((item) => item.daysLeft >= 0 && (item.status === "red" || item.status === "yellow"))
           .sort((a, b) => a.daysLeft - b.daysLeft)
           .slice(0, 6);
 

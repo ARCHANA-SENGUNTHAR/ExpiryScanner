@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import AddItemModal from "./components/items/AddItemModal";
@@ -9,13 +9,17 @@ import CookingInsights from "./pages/CookingInsights";
 import ItemsPage from "./pages/ItemsPage";
 import AuthPage from "./pages/AuthPage";
 
+const VALID_PAGES = new Set(["auth", "dashboard", "scanner", "cooking", "items"]);
+
+const getPageFromHash = () => {
+  const hashPage = window.location.hash.replace(/^#/, "");
+  const defaultPage =
+    localStorage.getItem("isAuthenticated") === "true" ? "dashboard" : "auth";
+  return VALID_PAGES.has(hashPage) ? hashPage : defaultPage;
+};
+
 export default function App() {
-  // AUTH STATE (PERSISTENT)
-  const [page, setPage] = useState(() => {
-    return localStorage.getItem("isAuthenticated") === "true"
-      ? "dashboard"
-      : "auth";
-  });
+  const [page, setPage] = useState(getPageFromHash);
 
   // eslint-disable-next-line no-unused-vars
   const [user, setUser] = useState(() => {
@@ -27,20 +31,60 @@ export default function App() {
     }
   });
 
-
-
-
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+
+  useEffect(() => {
+    const syncPageWithHash = () => {
+      const nextPage = getPageFromHash();
+      const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+
+      if (!isAuthenticated && nextPage !== "auth") {
+        setPage("auth");
+        if (window.location.hash !== "#auth") {
+          window.history.replaceState(null, "", "#auth");
+        }
+        return;
+      }
+
+      setPage(nextPage);
+    };
+
+    syncPageWithHash();
+    window.addEventListener("hashchange", syncPageWithHash);
+
+    return () => {
+      window.removeEventListener("hashchange", syncPageWithHash);
+    };
+  }, []);
+
+  const navigateToPage = (nextPage, { replace = false } = {}) => {
+    const fallbackPage =
+      localStorage.getItem("isAuthenticated") === "true" ? "dashboard" : "auth";
+    const safePage = VALID_PAGES.has(nextPage) ? nextPage : fallbackPage;
+    const nextHash = `#${safePage}`;
+
+    if (window.location.hash === nextHash) {
+      setPage(safePage);
+      return;
+    }
+
+    if (replace) {
+      window.history.replaceState(null, "", nextHash);
+      setPage(safePage);
+      return;
+    }
+
+    window.location.hash = safePage;
+  };
 
   const openAddItemModal = () => setShowAddModal(true);
 
   const handleLogout = () => {
     localStorage.clear();
     setUser(null);
-    setPage("auth");
+    navigateToPage("auth", { replace: true });
   };
-
 
   return (
     <div className="flex min-h-screen bg-[#DFFFD8]/40">
@@ -48,9 +92,9 @@ export default function App() {
       {page !== "auth" && (
         <Sidebar
           user={user}
-          onShowScanner={() => setPage("scanner")}
-          onShowDashboard={() => setPage("dashboard")}
-          onShowItems={() => setPage("items")}
+          onShowScanner={() => navigateToPage("scanner")}
+          onShowDashboard={() => navigateToPage("dashboard")}
+          onShowItems={() => navigateToPage("items")}
           collapsed={!sidebarOpen}
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         />
@@ -61,7 +105,7 @@ export default function App() {
         {/* HEADER (HIDDEN ON AUTH) */}
         {page !== "auth" && (
           <Header
-            onShowScanner={() => setPage("scanner")}
+            onShowScanner={() => navigateToPage("scanner")}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           />
         )}
@@ -73,31 +117,30 @@ export default function App() {
             <AuthPage
               onAuthSuccess={(userData) => {
                 setUser(userData);
-                setPage("dashboard");
+                navigateToPage("dashboard", { replace: true });
               }}
             />
-
           )}
 
           {/* DASHBOARD */}
           {page === "dashboard" && (
             <DashboardPage
-              onShowCooking={() => setPage("cooking")}
-              onShowItems={() => setPage("items")}
+              onShowCooking={() => navigateToPage("cooking")}
+              onShowItems={() => navigateToPage("items")}
               onAddItem={openAddItemModal}
               onLogout={handleLogout}
-              onShowScanner={() => setPage("scanner")}
+              onShowScanner={() => navigateToPage("scanner")}
             />
           )}
 
           {/* SCANNER */}
           {page === "scanner" && (
-            <ScannerPage onBack={() => setPage("dashboard")} />
+            <ScannerPage onBack={() => navigateToPage("dashboard")} />
           )}
 
           {/* COOKING */}
           {page === "cooking" && (
-            <CookingInsights onBack={() => setPage("dashboard")} />
+            <CookingInsights onBack={() => navigateToPage("dashboard")} />
           )}
 
           {/* ITEMS */}
